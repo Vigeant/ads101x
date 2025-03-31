@@ -110,6 +110,7 @@ esp_err_t ads101x_init(ads101x_t *const me, ads101x_model_t model, gpio_num_t in
 	me->is_complete = false;
 	me->int_pin = int_pin;
 	me->use_interrupt = use_interrupt;
+	me->i2c_dev = NULL;
 
 	/* Add device to I2C bus */
 	i2c_device_config_t i2c_dev_conf = {
@@ -119,6 +120,7 @@ esp_err_t ads101x_init(ads101x_t *const me, ads101x_model_t model, gpio_num_t in
 
 	if (i2c_master_bus_add_device(i2c_bus_handle, &i2c_dev_conf, &me->i2c_dev) != ESP_OK) {
 		ESP_LOGE(TAG, "Failed to add device to I2C bus");
+		me->i2c_dev = NULL;
 		return ret;
 	}
 
@@ -136,13 +138,18 @@ esp_err_t ads101x_init(ads101x_t *const me, ads101x_model_t model, gpio_num_t in
 		gpio_isr_handler_add(me->int_pin, isr_handler, (void *)me);
 	}
 
+	/* a transaction to check if the device is ok */
+	if (ads101x_conversion_complete(me) != ESP_OK) {
+		i2c_master_bus_rm_device(me->i2c_dev);
+		ESP_LOGE(TAG, "Failed to initialize device, check wiring and power supply");
+		return ESP_FAIL;
+	}
 	/* Print successful initialization message */
 	ESP_LOGI(TAG, "Instance initialized successfully");
 
 	/* Return ESP_OK */
 	return ret;
 }
-
 /**
  * @brief Function that reads a specific single-ended ADC channel.
  */
